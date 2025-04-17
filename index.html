@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bank Statement Analyzer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    #fileInput {
+      margin-bottom: 10px;
+    }
+    #results {
+      background: #fff;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+<h1>📄 Bank Statement Subscription Detector</h1>
+<input type="file" id="fileInput" accept=".pdf" />
+<div id="results">Upload a bank statement to see recurring charges...</div>
+
+<script>
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async function() {
+    const typedarray = new Uint8Array(this.result);
+    const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const strings = content.items.map(item => item.str);
+      fullText += strings.join('\n') + '\n';
+    }
+
+    const results = detectRecurring(fullText);
+    document.getElementById('results').innerHTML = results;
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function detectRecurring(text) {
+  const lines = text.split('\n');
+  const vendorMap = {};
+
+  for (let line of lines) {
+    if (/\$\d+\.\d{2}/.test(line)) {
+      const match = line.match(/([A-Za-z\s\&\-\']+)\s+\$\d+\.\d{2}/);
+      if (match) {
+        const vendor = match[1].trim().toUpperCase();
+        vendorMap[vendor] = (vendorMap[vendor] || 0) + 1;
+      }
+    }
+  }
+
+  const recurring = Object.entries(vendorMap)
+    .filter(([_, count]) => count > 1)
+    .map(([vendor, count]) => `${vendor} (${count} times)`)
+    .join('\n');
+
+  return recurring.length
+    ? `🔁 Recurring Charges Detected:\n\n${recurring}`
+    : `✅ No obvious recurring charges detected.`;
+}
+</script>
+
+</body>
+</html>
